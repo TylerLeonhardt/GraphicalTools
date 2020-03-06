@@ -17,15 +17,24 @@ namespace OutGridView.Cmdlet
 
         private bool _cancelled;
 
+        private static bool _initialized;
+
         internal HashSet<int> SelectedIndexes { get; private set; } = new HashSet<int>();
+
         public void Start(ApplicationData applicationData)
         {
-            Application.Init();
-            var top = Application.Top;
+            if (!_initialized)
+            {
+                Application.Init();
+                _initialized = true;
+            }
+
+            var tframe = Application.Top.Frame;
+			var ntop = new Toplevel(tframe);
 
             // Since top is static, state would be preserved in a PowerShell process
             // so we remove everything from Top as a precaution.
-            top.RemoveAll();
+            // top.RemoveAll();
 
             // Creates the top-level window to show
             var win = new Window(applicationData.Title ?? "Out-ConsoleGridView")
@@ -36,7 +45,7 @@ namespace OutGridView.Cmdlet
                 Width = Dim.Fill(),
                 Height = Dim.Fill()
             };
-            top.Add(win);
+            ntop.Add(win);
 
             // Creates a menubar, the item "New" has a help menu.
             var menu = new MenuBar(new MenuBarItem []
@@ -45,19 +54,19 @@ namespace OutGridView.Cmdlet
                     applicationData.PassThru
                     ? new MenuItem []
                     {
-                        new MenuItem("_Accept", "", () => { if (Quit("Accept", ACCEPT_TEXT)) top.Running = false; }),
-                        new MenuItem("_Cancel", "", () =>{ if (Quit("Cancel", CANCEL_TEXT)) _cancelled = true; top.Running = false; })
+                        new MenuItem("_Accept", "", () => { if (Quit("Accept", ACCEPT_TEXT)) Application.RequestStop(); }),
+                        new MenuItem("_Cancel", "", () =>{ if (Quit("Cancel", CANCEL_TEXT)) _cancelled = true; Application.RequestStop(); })
                     }
                     : new MenuItem []
                     {
-                        new MenuItem("_Close", "", () =>{ if (Quit("Close", CLOSE_TEXT)) top.Running = false; })
+                        new MenuItem("_Close", "", () =>{ if (Quit("Close", CLOSE_TEXT)) Application.RequestStop(); })
                     })
             });
-            top.Add(menu);
+            ntop.Add(menu);
 
             var gridHeaders = applicationData.DataTable.DataColumns.Select((c) => c.Label).ToList();
             // We add one as the offset here to line it up with the data.
-            win.Add(new Label(GetPaddedString(gridHeaders, top.Frame.Width - 3, offset: 1)));
+            win.Add(new Label(GetPaddedString(gridHeaders, tframe.Width - 3, offset: 1)));
             
 
             var items = new List<string>();
@@ -72,7 +81,7 @@ namespace OutGridView.Cmdlet
                 // If we have PassThru, then we want to make them selectable. If we make them selectable,
                 // they have a 8 character addition of a checkbox ("     [ ]") that we have to factor in.
                 int offset = applicationData.PassThru ? 8 : 4;
-                items.Add(GetPaddedString(valueList, top.Frame.Width - 3, offset));
+                items.Add(GetPaddedString(valueList, tframe.Width - 3, offset));
             }
             var list = new ListView(items)
             {
@@ -84,8 +93,7 @@ namespace OutGridView.Cmdlet
             };
             
             win.Add(list);
-
-            Application.Run();
+            Application.Run(ntop);
 
             if (_cancelled)
             {
